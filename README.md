@@ -116,6 +116,7 @@ The same mod jar, dropped into a Fabric server, publishes every player on it: a 
 - **Admin page:** the server's TPS and tick time, and every player online or offline, with health, position, ping and advancement progress. Open anyone for their inventory, statistics and checklists.
 - **Actions and console:** with a separate control key, heal, feed, change game mode, message, kick, ban and whitelist players, or run any command and see the output. Every action is logged.
 - **Player links:** a link that shows one player only their own page.
+- **Their view (off by default):** what a player is looking at, for players who have the mod and turned sharing on themselves. Vanilla clients can't be shown, and nothing is captured unless someone has that player's page open.
 - **In game:** `/mcstatus admin` sends an op a clickable admin link, `/mcstatus control` the one that can act; `/mcstatus link` sends a player theirs.
 
 Optional, and inactive until you run `python setup.py server`. **[Server tool guide →](docs/server-tool.md)**

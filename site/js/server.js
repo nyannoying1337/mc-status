@@ -4,6 +4,9 @@
 // every player; clicking one opens their page. The control key adds actions and
 // the console (server-control.js). A player's own link opens only their page.
 // The Worker decides what each key may see and do; this page just shows it.
+//
+// Opening a player's page also tells the Worker so, which is how the server
+// knows to ask that player's client for a frame. Closing it stops the asking.
 import { assetsReady, glyphWidths } from "./assets.js";
 import { advancementsPanel, chip, itemIcon, panel, statsPanel } from "./cards.js";
 import { API_URL, SITE_NAME } from "./config.js";
@@ -161,6 +164,40 @@ function playerTable(players) {
   ]);
 }
 
+/** Mirrors canSeeScreen in worker/server.js; the Worker is what actually decides. */
+function maySeeScreen(player) {
+  const mode = view.server?.player_screens || "off";
+  if (mode !== "control" && mode !== "admin") return false;
+  if (view.role === "player") return true;
+  return mode === "admin" || Boolean(view.control);
+}
+
+/**
+ * What the player is looking at, if their own client agreed to send it. The
+ * image is fetched with the key rather than pushed, so it never reaches a
+ * viewer who isn't allowed it, and ?t= makes each frame its own URL.
+ */
+function screenPanel(player) {
+  if (!maySeeScreen(player)) return null;
+  const note = player.screen_at ? `Taken ${timeAgo(player.screen_at)}` : "";
+  if (player.screen_at) {
+    const image = el("img", {
+      class: "shot-image", alt: `What ${player.name} is looking at`, loading: "lazy",
+      src: `${API_URL}/server/shot?key=${encodeURIComponent(key)}&uuid=${player.uuid}&t=${player.screen_at}`,
+    });
+    image.addEventListener("click", () => window.open(image.src, "_blank", "noopener"));
+    return panel("Their view", [image], "", note);
+  }
+  if (!player.online) return panel("Their view", [el("p", { class: "empty", text: "Only while they're online." })]);
+  if (player.screen_capable === false) {
+    return panel("Their view", [el("p", {
+      class: "empty",
+      text: "Nothing to show. A view only comes from a player who has the mod and has turned sharing on themselves; there's no way to see one otherwise.",
+    })]);
+  }
+  return panel("Their view", [el("p", { class: "empty", text: "Waiting for a frame from their game." })]);
+}
+
 function playerPage(player, isAdmin) {
   const chips = [
     chip("", player.online ? "Online" : player.last_seen ? `Last seen ${timeAgo(player.last_seen)}` : "Offline"),
@@ -210,6 +247,7 @@ function playerPage(player, isAdmin) {
   // statistics sit under the inventory, so the left column keeps pace with the
   // (usually much longer) advancements list on the right
   const left = el("div", { class: "col" }, [
+    screenPanel(player),
     player.online && glyphWidths ? panel("Inventory", [el("div", { class: "inventory-well" }, [inventoryNode(player)])])
       : panel("Inventory", [el("p", { class: "empty", text: "Only shown while they're online." })]),
     player.stats ? statsPanel(player.stats, player.online) : null,
@@ -219,6 +257,24 @@ function playerPage(player, isAdmin) {
   ]);
   const controls = isAdmin && view.control ? controlsPanel(player, { connected: view.connected, log: actionLog }) : null;
   return [identity, controls, el("div", { class: "grid" }, [left, right])];
+}
+
+// The server only asks a client for a frame while someone has that player's
+// page open, so this is what starts and stops the asking. A reconnect forgets,
+// so it's sent again whenever the socket opens.
+let wantWatch = null;
+let sentWatch = null;
+
+function watch(uuid) {
+  wantWatch = uuid || null;
+  flushWatch();
+}
+
+function flushWatch(force = false) {
+  if (socket?.readyState !== WebSocket.OPEN) return;
+  if (!force && wantWatch === sentWatch) return;
+  sentWatch = wantWatch;
+  socket.send(JSON.stringify({ type: "watch", uuid: wantWatch }));
 }
 
 function render() {
@@ -242,6 +298,7 @@ function draw() {
 
   if (view.role === "player") {
     const me = players[0];
+    watch(me?.uuid || null);
     if (!me) {
       screen("clock", "Nothing about you yet", "The server hasn't reported you. Join it once, and this page fills in by itself.");
       return;
@@ -251,6 +308,7 @@ function draw() {
     const wanted = selected || location.hash.match(/player=([0-9a-f-]{36})/)?.[1];
     const player = wanted && players.find((p) => p.uuid === wanted);
     const top = notice ? el("p", { class: "notice", role: "alert", text: notice }) : null;
+    watch(player ? player.uuid : null);
     if (player) {
       selected = player.uuid;
       root.replaceChildren(...[top, ...playerPage(player, true)].filter(Boolean));
@@ -290,7 +348,11 @@ function connect() {
   if (socket) socket.close(1000, "reconnect");
   const ws = new WebSocket(`${API_URL.replace(/^http/, "ws")}/server/live?key=${encodeURIComponent(key)}`);
   socket = ws;
-  ws.addEventListener("open", () => { failures = 0; });
+  ws.addEventListener("open", () => {
+    failures = 0;
+    sentWatch = undefined;  // a fresh socket knows nothing about what we're looking at
+    flushWatch(true);
+  });
   ws.addEventListener("message", async (event) => {
     if (typeof event.data !== "string") return;
     const message = JSON.parse(event.data);
@@ -299,6 +361,9 @@ function connect() {
       else if (message.entry) actionLog = [...actionLog.filter((entry) => entry.id !== message.entry.id), message.entry].slice(-50);
     } else if (message.type === "link" && view) {
       view = { ...view, connected: message.connected };
+    } else if (message.type === "screen" && view) {
+      // Only the time arrives; the image itself is fetched with the key.
+      view = { ...view, players: (view.players || []).map((player) => (player.uuid === message.uuid ? { ...player, screen_at: message.at } : player)) };
     } else if (message.type === "action") {
       if (!message.ok) showNotice(`Not done: ${message.error}`);
       return;

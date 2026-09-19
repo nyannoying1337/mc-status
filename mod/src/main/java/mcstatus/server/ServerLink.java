@@ -16,14 +16,15 @@ import com.google.gson.JsonParser;
 
 /**
  * The server's own connection to the Worker (/server/connect). The server
- * connects out, so nothing has to reach in: status goes up it, and actions from
- * the admin page come back down. Reconnects by itself, backing off to a minute.
+ * connects out, so nothing has to reach in: status goes up it, and messages for
+ * the server — actions from the admin page, and whose page someone has open —
+ * come back down. Reconnects by itself, backing off to a minute.
  */
 final class ServerLink implements WebSocket.Listener {
 	private final HttpClient http;
 	private final URI uri;
 	private final String token;
-	private final Consumer<JsonObject> onAction;
+	private final Consumer<JsonObject> onMessage;
 	private final ScheduledExecutorService retry = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "mc-status link");
 		thread.setDaemon(true);
@@ -34,11 +35,11 @@ final class ServerLink implements WebSocket.Listener {
 	private volatile boolean stopped;
 	private int failures;
 
-	ServerLink(HttpClient http, String workerUrl, String token, Consumer<JsonObject> onAction) {
+	ServerLink(HttpClient http, String workerUrl, String token, Consumer<JsonObject> onMessage) {
 		this.http = http;
 		this.uri = URI.create(workerUrl.replaceFirst("^http", "ws") + "/server/connect");
 		this.token = token;
-		this.onAction = onAction;
+		this.onMessage = onMessage;
 	}
 
 	void start() {
@@ -108,7 +109,7 @@ final class ServerLink implements WebSocket.Listener {
 			partial.setLength(0);
 			try {
 				JsonObject message = JsonParser.parseString(text).getAsJsonObject();
-				if (message.has("type") && "action".equals(message.get("type").getAsString())) onAction.accept(message);
+				if (message.has("type")) onMessage.accept(message);
 			} catch (RuntimeException err) {
 				McStatusServer.LOG.debug("ignored link message: {}", err.toString());
 			}

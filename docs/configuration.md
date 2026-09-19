@@ -154,6 +154,7 @@ Written in the game's `config` folder on first start. Restart the game after cha
 | `share_item_names` | `false` | | publish custom item names, which can contain anything |
 | `share_mods` | `true` | | publish the list of installed mods and their versions |
 | `share_server_world` | `false` | | allow frames and coordinates from servers, where other players are in shot |
+| `share_screen_with_server` | `false` | | let a server you join ask for your view of the world, for its admin page ([what that means](server-tool.md#a-players-view-of-the-world)) |
 
 ## The server tool
 

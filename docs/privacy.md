@@ -17,9 +17,14 @@ What the page shows, nothing more. The agent builds every push from an explicit 
 
 On someone else's server, the mod doesn't collect coordinates, world facts, statistics or advancements, and the agent drops them again as a second line of defence. See [Multiplayer](features.md#multiplayer).
 
+One thing travels the other way, and only if you switch it on: with `share_screen_with_server`, a server you join may ask for your view of the world for its own admin page. That is the only setting in this project that publishes anything of yours to somebody else's page rather than your own, which is why it is off by default and why you are told in chat the first time a server actually asks. See [A player's view of the world](server-tool.md#a-players-view-of-the-world).
+
 ## Never read or sent
 
 - your local IP, hostname and user name;
+- your actual screen: frames are taken before the game draws any interface, so no
+  capture on your own page or a server's can contain chat, the HUD, an open
+  screen, another window, or anything outside the game;
 - the world seed and the world's folder path;
 - chat, and the addresses of servers you join;
 - F2 screenshots (the mod's HUD-free frame is used instead);
@@ -43,6 +48,7 @@ On someone else's server, the mod doesn't collect coordinates, world facts, stat
 | Custom item names | hidden | `share_item_names` in the mod's settings |
 | Installed mods | shown | `share_mods` in the mod's settings |
 | Coordinates and frames on someone's server | hidden | `share_server_world`, in **both** the mod's settings and the agent's `[privacy]` |
+| Your view of the world on a server's admin page | off | `share_screen_with_server` in the mod's settings; the server must also have `player_screens` on |
 
 ## Who can watch
 
@@ -52,6 +58,7 @@ On someone else's server, the mod doesn't collect coordinates, world facts, stat
 - **Revoking:** `python setup.py invite` replaces the key. Anyone still watching with the old one is disconnected at the agent's next push (within a minute), not just on their next visit.
 - **Comparisons are constant time,** so keys can't be guessed character by character.
 - **The server tool** has its own keys: a control key that can act on the server, an admin key that can only look, and player links that each open one player's page. Treat the control key like the server console's password. See [Server tool → How keys work](server-tool.md#how-keys-work).
+- **A player's view of the world** is a separate decision from the rest of the admin page: `player_screens=control` keeps frames with whoever holds the control key, and `admin` lets every admin key see them. Either way only players who opted in on their own client are ever asked, and each player can always see their own.
 
 ## What isn't protected
 
