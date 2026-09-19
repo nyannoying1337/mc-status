@@ -17,6 +17,10 @@ No Minecraft or Cloudflare needed: RCON, the Worker's storage and subprocesses a
 ```bash
 python tests/test_agent_mod.py     # mod source, logout render, panorama, play time, checklists, privacy
 python tests/test_curses.py        # curse rules over RCON
+python tests/test_events.py        # the day's timeline: sessions, milestones, restarts
+python tests/test_archive.py       # frame archive: thinning, privacy, pruning, staging
+python tests/test_render.py        # map render: noticing a new world, starting clean
+python tests/test_icons.py         # item icon renderer, over a synthetic client jar
 node tests/test_worker.mjs         # Worker routes, broadcasts, panorama, map markers
 node tests/test_server_worker.mjs  # server tool: keys, per-viewer filtering, write throttling
 python setup.py --dry-run --yes --site-url https://example.github.io/mc-status/ --worker-url https://mc-status.example.workers.dev

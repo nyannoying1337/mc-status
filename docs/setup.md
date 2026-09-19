@@ -5,7 +5,7 @@
 About 15 minutes, all on free plans.
 
 - [What you need](#what-you-need)
-- [Fork and deploy](#fork-and-deploy)
+- [Start your own and deploy](#start-your-own-and-deploy)
 - [Your own domain](#your-own-domain)
 - [Commands for later](#commands-for-later)
 - [Deploying the Worker from GitHub](#deploying-the-worker-from-github)
@@ -40,6 +40,10 @@ branches hold *published content* rather than code — `map` the rendered world,
 whoever published them. Yours get filled in by the tools below. (If you fork
 instead, or clone this repository directly, add `--single-branch` to leave
 someone else's world behind.)
+
+While you're there, point the README's Tests badge at your own repository: it
+carries `nyannoying1337/mc-status` twice, and until you change it the badge
+reports this repository's runs rather than yours.
 
 ### 2. Build the mod once
 

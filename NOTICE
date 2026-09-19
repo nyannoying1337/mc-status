@@ -1,0 +1,6 @@
+mc-status
+Licensed under the MIT License; see LICENSE.
+
+Minecraft is a trademark of Mojang Synergies AB. This project isn't affiliated
+with Mojang or Microsoft. No Minecraft assets are included in this repository;
+the site's deploy workflow downloads Mojang's client jar to build its icons.

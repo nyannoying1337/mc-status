@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mc-status setup: everything between "I forked the repo" and "it's live".
+"""mc-status setup: everything between "I made my own copy" and "it's live".
 
     python setup.py                 guided setup; safe to run again
     python setup.py invite          new invite key and link (old links stop working)
