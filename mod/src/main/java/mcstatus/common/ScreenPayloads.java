@@ -5,7 +5,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * The two messages behind "show me what they're looking at": a server asking one
@@ -36,14 +36,14 @@ public final class ScreenPayloads {
 	public static synchronized void register() {
 		if (registered) return;
 		registered = true;
-		PayloadTypeRegistry.playS2C().register(Request.TYPE, Request.CODEC);
-		PayloadTypeRegistry.playC2S().register(Chunk.TYPE, Chunk.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(Request.TYPE, Request.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(Chunk.TYPE, Chunk.CODEC);
 	}
 
 	/** Server to client: send one frame, this wide, tagged with this id. */
 	public record Request(int frame, int width, int quality) implements CustomPacketPayload {
 		public static final Type<Request> TYPE =
-			new Type<>(ResourceLocation.fromNamespaceAndPath("mc-status", "screen_request"));
+			new Type<>(Identifier.fromNamespaceAndPath("mc-status", "screen_request"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, Request> CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, Request::frame,
 			ByteBufCodecs.VAR_INT, Request::width,
@@ -59,7 +59,7 @@ public final class ScreenPayloads {
 	/** Client to server: one piece of the frame that was asked for. */
 	public record Chunk(int frame, int index, int total, byte[] data) implements CustomPacketPayload {
 		public static final Type<Chunk> TYPE =
-			new Type<>(ResourceLocation.fromNamespaceAndPath("mc-status", "screen_chunk"));
+			new Type<>(Identifier.fromNamespaceAndPath("mc-status", "screen_chunk"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, Chunk> CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, Chunk::frame,
 			ByteBufCodecs.VAR_INT, Chunk::index,
