@@ -84,7 +84,9 @@ assert.equal((await (await push([{ uuid: ALICE, name: "Alice", online: true, pos
 // --- live views: admin sees everyone, a player only themselves
 function socket(viewer, hashOverride, tag = "server-viewer") {
   const s = { tag, sent: [], closed: null, send(m) { this.sent.push(JSON.parse(m)); }, close(code) { this.closed = { code }; } };
-  s.deserializeAttachment = () => (tag === "server-link" ? { kind: "server" } : { ...viewer, secretsHash: hashOverride ?? s.hash });
+  s.attachment = tag === "server-link" ? { kind: "server" } : { ...viewer };
+  s.serializeAttachment = (value) => { s.attachment = value; };
+  s.deserializeAttachment = () => (tag === "server-link" ? s.attachment : { ...s.attachment, secretsHash: hashOverride ?? s.hash });
   sockets.push(s);
   return s;
 }
@@ -158,6 +160,93 @@ assert.equal(control.sent.at(-1).error, "Too many actions; wait a minute.");
 await instance.webSocketClose(serverLink, 1000, "bye");
 serverLink.closed = { code: 1000 };
 assert.deepEqual(control.sent.at(-1), { type: "link", connected: false });
+
+// --- a player's view of the world: pushed by the server, fetched with a key
+const pushScreens = (mode, players) => call("/server/status", {
+  method: "POST", headers: { Authorization: "Bearer push-secret", "Content-Type": "application/json" },
+  body: JSON.stringify({ server: { name: "Test", tps: 20, player_screens: mode }, players }),
+});
+const both = [{ uuid: ALICE, name: "Alice", online: true }, { uuid: BOB, name: "Bob", online: true }];
+const putShot = (uuid, body, token = "push-secret") => call(`/server/shot?uuid=${uuid}`, {
+  method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/jpeg" }, body,
+});
+const getShot = (uuid, viewerKey) => call(`/server/shot?key=${encodeURIComponent(viewerKey)}&uuid=${uuid}`);
+const frame = new Uint8Array([0xff, 0xd8, 1, 2, 3]);
+
+assert.equal((await putShot(ALICE, frame, "agent-secret")).status, 401, "the agent's token can't push frames");
+assert.equal((await putShot(ALICE, frame, "admin-key-123")).status, 401, "nor can an admin key");
+assert.equal((await putShot("not-a-uuid", frame)).status, 400);
+assert.equal((await putShot(ALICE, new Uint8Array(0))).status, 400, "an empty frame is not a frame");
+assert.equal((await putShot(ALICE, new Uint8Array(600 * 1024))).status, 413, "and one this big is a bug or an attempt");
+
+// off: the server never collected any, and nothing is served even to the control key
+await pushScreens("off", both);
+await putShot(ALICE, frame);
+assert.equal((await getShot(ALICE, "control-key-789")).status, 404, "with player_screens off there is nothing to see");
+
+// control: the control key and the player themselves, nobody else
+await pushScreens("control", both);
+const stored = await putShot(ALICE, frame);
+assert.equal(stored.status, 200);
+assert.equal((await stored.json()).bytes, frame.byteLength);
+const served = await getShot(ALICE, "control-key-789");
+assert.equal(served.status, 200);
+assert.equal(served.headers.get("Content-Type"), "image/jpeg");
+assert.deepEqual(new Uint8Array(await served.arrayBuffer()), frame);
+assert.equal((await getShot(ALICE, "admin-key-123")).status, 404, "an admin key can look but not watch, under control");
+assert.equal((await getShot(ALICE, aliceKey)).status, 200, "a player may always see their own");
+assert.equal((await getShot(BOB, aliceKey)).status, 404, "and only their own");
+assert.equal((await call(`/server/shot?uuid=${ALICE}`)).status, 401, "no key, nothing");
+
+// what the page is told: only a viewer who may see it learns a frame exists
+assert.equal(mod.canSeeScreen({ role: "admin", control: true }, "control", ALICE), true);
+assert.equal(mod.canSeeScreen({ role: "admin" }, "control", ALICE), false);
+assert.equal(mod.canSeeScreen({ role: "admin" }, "admin", ALICE), true);
+assert.equal(mod.canSeeScreen({ role: "player", uuid: ALICE }, "admin", BOB), false);
+assert.equal(mod.canSeeScreen({ role: "admin", control: true }, "off", ALICE), false);
+control.sent.length = 0; admin.sent.length = 0; alice.sent.length = 0;
+await putShot(ALICE, frame);
+assert.equal(control.sent.at(-1).type, "screen", "control is told a new frame arrived");
+assert.equal(control.sent.at(-1).uuid, ALICE);
+assert.deepEqual(admin.sent, [], "a look-only admin is told nothing under control");
+assert.equal(alice.sent.at(-1).type, "screen", "and the player hears about their own");
+const state = await instance.state();
+assert.ok(mod.viewFor({ role: "admin", control: true }, state).players.find((p) => p.uuid === ALICE).screen_at > 0);
+assert.equal(mod.viewFor({ role: "admin" }, state).players.find((p) => p.uuid === ALICE).screen_at, undefined);
+
+// admin: every admin key too
+await pushScreens("admin", both);
+assert.equal((await getShot(ALICE, "admin-key-123")).status, 200);
+
+// --- watching: the server is told which players someone actually has open
+// the link from the action tests was closed; frames need one of their own
+const frameLink = socket(null, null, "server-link");
+const watchers = socket({ role: "admin", control: true }); watchers.hash = await secretsHash();
+frameLink.sent.length = 0;
+await instance.webSocketMessage(watchers, JSON.stringify({ type: "watch", uuid: ALICE }));
+assert.deepEqual(frameLink.sent.at(-1), { type: "watch", uuids: [ALICE] });
+await instance.webSocketMessage(watchers, JSON.stringify({ type: "watch", uuid: ALICE }));
+assert.equal(frameLink.sent.length, 1, "saying the same thing twice doesn't wake the server");
+await instance.webSocketMessage(watchers, JSON.stringify({ type: "watch", uuid: "not-a-uuid" }));
+assert.deepEqual(frameLink.sent.at(-1), { type: "watch", uuids: [] }, "a bad uuid stops the watching rather than starting any");
+await instance.webSocketMessage(watchers, JSON.stringify({ type: "watch", uuid: BOB }));
+assert.deepEqual(frameLink.sent.at(-1), { type: "watch", uuids: [BOB] });
+await instance.webSocketClose(watchers, 1000, "gone");
+assert.deepEqual(frameLink.sent.at(-1), { type: "watch", uuids: [] }, "the last viewer leaving stops the asking");
+
+// under control, a look-only admin can't make the server ask anyone for anything
+await pushScreens("control", both);
+const looker = socket({ role: "admin" }); looker.hash = await secretsHash();
+frameLink.sent.length = 0;
+await instance.webSocketMessage(looker, JSON.stringify({ type: "watch", uuid: ALICE }));
+assert.deepEqual(frameLink.sent, [], "nobody who may not see a frame can start one being captured");
+
+// --- a player the server stops reporting takes their frame with them
+assert.ok(rows.has(`shot:${ALICE}`));
+await pushScreens("control", [{ uuid: BOB, name: "Bob", online: true }]);
+assert.ok(!rows.has(`shot:${ALICE}`), "their frame is deleted, not left sitting in storage");
+assert.deepEqual(JSON.parse(rows.get("server:shots")), {});
+assert.equal((await getShot(ALICE, "control-key-789")).status, 404);
 
 // the routes: the server connects with its token only, and viewers can't pretend to be it
 assert.equal((await call("/server/connect", { headers: { Upgrade: "websocket", Authorization: "Bearer agent-secret" } })).status, 401);

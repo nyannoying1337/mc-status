@@ -10,6 +10,7 @@ It's optional: until you run `python setup.py server`, every server route on you
 - [The admin page](#the-admin-page)
 - [A player's page](#a-players-page)
 - [Actions and the console](#actions-and-the-console)
+- [A player's view of the world](#a-players-view-of-the-world)
 - [In-game commands](#in-game-commands)
 - [Setting it up](#setting-it-up)
 - [Settings](#settings)
@@ -23,6 +24,7 @@ It's optional: until you run `python setup.py server`, every server route on you
 | --- | --- |
 | **the control key** | everything the admin key sees, plus [actions and the console](#actions-and-the-console) |
 | **the admin key** | the server's overview and every player, online and offline, including coordinates; look only |
+| **either, with `player_screens` on** | also [what a consenting player is looking at](#a-players-view-of-the-world) — the control key only, unless you set `player_screens=admin` |
 | **a player link** | only that player's own page |
 | **no key or a wrong one** | a key field and nothing else: no server name, no player names, no counts |
 
@@ -84,6 +86,28 @@ Opened with the **control key**, the admin page can act on the server too.
 
 If the server isn't connected, the buttons are replaced by a note and nothing is queued.
 
+## A player's view of the world
+
+Off by default, and narrower than it sounds. With `player_screens` set, the admin page can show what a player is looking at, as a still frame that refreshes every half a minute or so.
+
+**Who can be shown.** Only a player who has the mc-status mod installed *and* has set `share_screen_with_server=true` in their own `config/mc-status.properties`. A vanilla client cannot be shown at all: a server has no access to what a client draws, and there's no setting on the server that changes that. Anyone who hasn't opted in appears with "nothing to show" on their page, which is also what an admin sees for a player who has quietly turned it back off.
+
+**What it is.** The world as their character sees it, captured before their game draws any interface. It can never contain their chat, their HUD, an open inventory, another window, or anything else on their computer. It is not their screen, and it is not live video.
+
+**What the player sees.** The first time a frame is actually asked for in a session, they get one line in chat saying an admin is looking and how to turn it off. They're told when someone is watching, not merely that the server has the feature.
+
+**Only while somebody's looking.** Frames are asked for only while that player's page is open in a browser. Close the page and their game stops capturing: nothing is taken, sent or stored when nobody is watching.
+
+**Settings**, in `config/mc-status-server.properties`:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `player_screens` | `off` | `off`, `control` (only the control key sees frames) or `admin` (every admin key too) |
+| `player_screen_interval_seconds` | `30` | seconds between frames from one watched player, at least 15 |
+| `player_screen_width` | `480` | width frames are scaled to on the player's machine, 160–960 |
+
+**What it costs.** A watched player sends about 40 kB every 30 seconds from their own connection, and each frame is one more Durable Object write. Nobody watching costs nothing at all.
+
 ## In-game commands
 
 | Command | Who can use it | Sends you |
@@ -125,6 +149,9 @@ Without the config file, the mod writes an empty one on first start and stays id
 | `server_name` | `Minecraft server` | shown at the top of the admin page |
 | `interval_seconds` | `30` | seconds between pushes, at least 10 |
 | `share_item_names` | `false` | publish custom item names, which can contain anything players type |
+| `player_screens` | `off` | show [a player's view of the world](#a-players-view-of-the-world): `off`, `control` or `admin` |
+| `player_screen_interval_seconds` | `30` | seconds between frames from one watched player, at least 15 |
+| `player_screen_width` | `480` | width frames are scaled to, 160–960 |
 
 ## Revoking access
 
@@ -141,7 +168,7 @@ Without the config file, the mod writes an empty one on first start and stays id
 
 ## Staying free
 
-The Worker stores each player as its own row and only rewrites rows that changed. The server's overview row is written at most once a minute; viewers still get every push live.
+The Worker stores each player as its own row and only rewrites rows that changed. The server's overview row is written at most once a minute; viewers still get every push live. Frames are their own rows, written only while someone has that player's page open, and deleted when the server stops reporting that player.
 
 | Players online all day | Storage writes per day | Free limit |
 | --- | --- | --- |

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -26,6 +27,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import mcstatus.common.ScreenPayloads;
 import mcstatus.common.Snapshots;
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -59,6 +61,7 @@ public class McStatusServer implements DedicatedServerModInitializer {
 	private final AtomicBoolean sending = new AtomicBoolean();
 	private final Map<UUID, JsonObject> offline = new HashMap<>();
 	private volatile ServerLink link;
+	private volatile PlayerScreens screens;
 	private long offlineReadAt;
 	private volatile long nextPushAt;
 	private String workerUrl;
@@ -82,6 +85,11 @@ public class McStatusServer implements DedicatedServerModInitializer {
 			LOG.warn("set worker_url and push_token in {} to start publishing", file);
 			return;
 		}
+		ScreenPayloads.register();
+		screens = new PlayerScreens(http, workerUrl, pushToken, screensMode(props),
+			Math.max(15, parseInt(props.getProperty("player_screen_interval_seconds", "30"), 30)),
+			Math.clamp(parseInt(props.getProperty("player_screen_width", "480"), 480), 160, 960));
+		screens.register();
 		ServerTickEvents.END_SERVER_TICK.register(this::tick);
 		LinkCommands links = new LinkCommands(http, workerUrl, pushToken, siteUrl);
 		CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) -> links.register(dispatcher));
@@ -90,7 +98,11 @@ public class McStatusServer implements DedicatedServerModInitializer {
 				link.send(GSON.toJson(result));
 				nextPushAt = 0;  // show the effect (kicked, banned, healed) right away
 			});
-			link = new ServerLink(http, workerUrl, pushToken, actions::handle);
+			link = new ServerLink(http, workerUrl, pushToken, message -> {
+				String type = message.get("type").getAsString();
+				if ("action".equals(type)) actions.handle(message);
+				else if ("watch".equals(type)) screens.watch(message);
+			});
 			link.start();
 		});
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -100,6 +112,7 @@ public class McStatusServer implements DedicatedServerModInitializer {
 	}
 
 	private void tick(MinecraftServer server) {
+		screens.tick(server);
 		long now = System.currentTimeMillis();
 		if (now < nextPushAt || sending.get()) return;
 		nextPushAt = now + intervalSeconds * 1000L;
@@ -146,6 +159,8 @@ public class McStatusServer implements DedicatedServerModInitializer {
 		meta.addProperty("time", Math.floorMod(time, 24000L));
 		meta.addProperty("weather", overworld.isThundering() ? "thunder" : overworld.isRaining() ? "rain" : "clear");
 		meta.addProperty("whitelist", server.getPlayerList().isUsingWhitelist());
+		// The Worker needs this to know who may be shown a frame at all.
+		meta.addProperty("player_screens", screens.mode());
 		meta.addProperty("generated_at", now);
 		out.add("server", meta);
 
@@ -191,6 +206,8 @@ public class McStatusServer implements DedicatedServerModInitializer {
 		json.addProperty("xpp", player.experienceProgress);
 		json.addProperty("game_mode", player.gameMode().getName());
 		json.addProperty("ping", player.connection.latency());
+		// So the page can say "they don't have the mod" rather than showing a blank box.
+		json.addProperty("screen_capable", screens.capable(player));
 		json.addProperty("dimension", player.level().dimension().identifier().toString());
 		JsonArray position = new JsonArray();
 		position.add(Math.round(player.getX() * 10) / 10.0);
@@ -248,6 +265,14 @@ public class McStatusServer implements DedicatedServerModInitializer {
 		}
 	}
 
+	/** Anything that isn't a mode we know is off: this one is not a typo to guess at. */
+	private static String screensMode(Properties props) {
+		String mode = props.getProperty("player_screens", PlayerScreens.OFF).trim().toLowerCase(Locale.ROOT);
+		if (mode.equals("control") || mode.equals("admin") || mode.equals(PlayerScreens.OFF)) return mode;
+		LOG.warn("player_screens={} isn't off, control or admin; treating it as off", mode);
+		return PlayerScreens.OFF;
+	}
+
 	private static int parseInt(String value, int fallback) {
 		try {
 			return Integer.parseInt(value.trim());
@@ -280,6 +305,14 @@ public class McStatusServer implements DedicatedServerModInitializer {
 				interval_seconds=30
 				# Custom item names can contain anything players type.
 				share_item_names=false
+				# Show a player's view of the world on the admin page. Off, or who may see it:
+				#   control  only the control key
+				#   admin    every admin key too
+				# Only players who have the mod and turned share_screen_with_server on ever
+				# send one, and they are told in game the first time one is asked for.
+				player_screens=off
+				player_screen_interval_seconds=30
+				player_screen_width=480
 				""");
 		} catch (IOException err) {
 			LOG.warn("could not write {}: {}", file, err.getMessage());

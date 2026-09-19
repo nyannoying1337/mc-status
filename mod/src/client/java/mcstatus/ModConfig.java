@@ -14,6 +14,7 @@ final class ModConfig {
 	boolean shareItemNames = false;
 	boolean shareMods = true;
 	boolean shareServerWorld = false;
+	boolean shareScreenWithServer = false;
 
 	static ModConfig load(Path path) {
 		Properties props = new Properties();
@@ -24,6 +25,7 @@ final class ModConfig {
 		props.setProperty("share_item_names", String.valueOf(config.shareItemNames));
 		props.setProperty("share_mods", String.valueOf(config.shareMods));
 		props.setProperty("share_server_world", String.valueOf(config.shareServerWorld));
+		props.setProperty("share_screen_with_server", String.valueOf(config.shareScreenWithServer));
 
 		if (Files.isRegularFile(path)) {
 			try (InputStream in = Files.newInputStream(path)) {
@@ -34,7 +36,8 @@ final class ModConfig {
 		} else {
 			try (OutputStream out = Files.newOutputStream(path)) {
 				props.store(out, "mc-status: share_item_names publishes custom item names, which can contain anything; "
-					+ "share_server_world allows frames and coordinates from servers, where other players are in shot");
+					+ "share_server_world allows frames and coordinates from servers, where other players are in shot; "
+					+ "share_screen_with_server lets a server that asks show your view of the world on its admin page");
 			} catch (IOException err) {
 				McStatusClient.LOG.warn("could not write default config {}: {}", path, err.getMessage());
 			}
@@ -46,6 +49,7 @@ final class ModConfig {
 		config.shareItemNames = Boolean.parseBoolean(props.getProperty("share_item_names", "false").trim());
 		config.shareMods = Boolean.parseBoolean(props.getProperty("share_mods", "true").trim());
 		config.shareServerWorld = Boolean.parseBoolean(props.getProperty("share_server_world", "false").trim());
+		config.shareScreenWithServer = Boolean.parseBoolean(props.getProperty("share_screen_with_server", "false").trim());
 		return config;
 	}
 

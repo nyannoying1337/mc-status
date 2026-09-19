@@ -591,7 +591,13 @@ def new_server(api_url: str, site_url: str, server_name: str | None = None) -> N
         f"site_url={page}\n"
         f"server_name={name}\n"
         "interval_seconds=30\n"
-        "share_item_names=false\n",
+        "share_item_names=false\n"
+        "# A player's view of the world on the admin page: off, control (only the\n"
+        "# control key) or admin (every admin key). Only players who have the mod and\n"
+        "# turned share_screen_with_server on ever send one; vanilla clients never can.\n"
+        "player_screens=off\n"
+        "player_screen_interval_seconds=30\n"
+        "player_screen_width=480\n",
         encoding="utf-8")
     say(f"\nWrote {target.relative_to(ROOT)} (gitignored).")
     say("On the server (Fabric Loader + Fabric API, Minecraft matching the mod):")
