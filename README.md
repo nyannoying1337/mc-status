@@ -6,6 +6,8 @@
   A 360° view and a 3D map of where you left once you log out.
 </p>
 
+<!-- Started this from the template? The Tests badge below points at this repository, not
+     yours: swap both nyannoying1337/mc-status for your own owner/repo so it shows your runs. -->
 <p align="center">
   <a href="https://github.com/nyannoying1337/mc-status/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/nyannoying1337/mc-status/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="Minecraft 26.2" src="https://img.shields.io/badge/Minecraft-26.2-62B47A">
@@ -96,7 +98,10 @@ About 15 minutes, all on free plans. You need a GitHub account, a Cloudflare acc
 git clone https://github.com/<you>/<your-repo>.git
 cd <your-repo>
 
-# 2. the wizard deploys the Worker, creates the keys, installs the agent and prints your invite link
+# 2. in your repository: Actions -> Release mod -> Run workflow.
+#    It builds the jar and attaches it to a release, which the wizard downloads from.
+
+# 3. the wizard deploys the Worker, creates the keys, installs the agent and prints your invite link
 python setup.py
 ```
 
@@ -146,7 +151,7 @@ flowchart LR
 
 | Guide | What's in it |
 | --- | --- |
-| [Setup](docs/setup.md) | Fork and deploy, your own domain, installing by hand, updating, troubleshooting |
+| [Setup](docs/setup.md) | Start your own and deploy, your own domain, installing by hand, updating, troubleshooting |
 | [Features](docs/features.md) | Every card on the page, the logout panorama and map, multiplayer, cursed mode |
 | [Server tool](docs/server-tool.md) | Admin page, player links, `/mcstatus` commands, setup on a server |
 | [Configuration](docs/configuration.md) | `agent/config.toml`, the mod's settings, secrets and repository variables |
@@ -156,6 +161,6 @@ flowchart LR
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Trademark and asset notes are in [NOTICE](NOTICE).
 
 NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT. Minecraft is a trademark of Mojang. The screenshots in this README show made-up demo data.

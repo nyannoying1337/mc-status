@@ -20,6 +20,7 @@ Created by `python setup.py` from [`agent/config.example.toml`](../agent/config.
 | Key | Default | What it does |
 | --- | --- | --- |
 | `url` | | your status page; only used to print invite links |
+| `name` | | the name shown on the page. `setup.py` pushes it to the `MCS_SITE_NAME` repository variable and remembers it here, so running setup again doesn't rename the page |
 
 ### `[worker]`
 
@@ -113,6 +114,7 @@ python map/render.py --world "path/to/saves/My World" --center 120 -40 --accept-
 | Key | Default | What it does |
 | --- | --- | --- |
 | `hide_coordinates` | `false` | removes coordinates from the page, the map marker and the death marker. The logout map still renders around your position, so turn `render_on_logout` off too if that matters |
+| `share_server_world` | `false` | publish coordinates and frames while you're on someone else's server. The mod has a `share_server_world` of its own and both have to be on. Statistics and advancements stay off regardless: the client can't read them on a server |
 
 ### `[cursed]`
 
