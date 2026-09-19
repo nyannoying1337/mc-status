@@ -9,6 +9,8 @@ agent/agent.log*
 tests/worker-under-test.mjs
 tests/server-under-test.mjs
 worker/.dev.vars
+# written by `npm install` in worker/, which tools/preview.py runs for you
+worker/package-lock.json
 .wrangler/
 worker/wrangler.generated.toml
 agent/playtime.json
