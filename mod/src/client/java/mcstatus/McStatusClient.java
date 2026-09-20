@@ -2,6 +2,7 @@ package mcstatus;
 
 import java.nio.file.Path;
 
+import mcstatus.common.ScreenPayloads;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -24,6 +25,10 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code panorama.png} + {@code .json} — a 360° view, taken when pausing in singleplayer</li>
  *   <li>{@code commands/*.json} — written by the agent (curses), run here in singleplayer</li>
  * </ul>
+ *
+ * <p>One thing doesn't go through a file: with {@code share_screen_with_server}
+ * on, a server you join may ask for your view of the world for its admin page,
+ * and {@link ScreenShare} answers over the game connection.
  */
 public class McStatusClient implements ClientModInitializer {
 	public static final Logger LOG = LoggerFactory.getLogger("mc-status");
@@ -33,19 +38,27 @@ public class McStatusClient implements ClientModInitializer {
 		ModConfig config = ModConfig.load(FabricLoader.getInstance().getConfigDir().resolve("mc-status.properties"));
 		Path dir = Minecraft.getInstance().gameDirectory.toPath().resolve("mc-status");
 
+		ScreenPayloads.register();
+
 		Progress progress = new Progress();
 		StateWriter state = new StateWriter(dir.resolve("state.json"), config, progress);
 		CommandQueue commands = new CommandQueue(dir.resolve("commands"));
 		FrameCapture capture = new FrameCapture(dir.resolve("latest.png"), config);
 		PanoramaCapture panorama = new PanoramaCapture(dir.resolve("panorama.png"), dir.resolve("panorama.json"));
+		ScreenShare screens = new ScreenShare(config, capture);
+		screens.register();
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			progress.tick(client);
 			state.tick(client);
 			commands.tick(client);
 			panorama.tick(client);
+			screens.tick(client);
 		});
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> state.markOffline());
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			state.markOffline();
+			screens.reset();
+		});
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> state.markOffline());
 
 		LevelRenderEvents.END_MAIN.register(context -> capture.onLevelRendered(Minecraft.getInstance()));

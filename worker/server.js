@@ -10,6 +10,10 @@
 // Player keys are an HMAC of the player's UUID with PLAYER_LINK_SECRET, so no
 // key table is stored: the Worker can check a link without remembering it.
 //
+// A player's view of the world (when the server has player_screens on and the
+// player's own client opted in) arrives on /server/shot and is kept as one row
+// per player. Who may look is the server's choice, pushed with its status.
+//
 // The server connects out to /server/connect and keeps that WebSocket open:
 // its status arrives over it, and actions from control viewers go back down it.
 // Nothing ever has to connect to the server.
@@ -22,6 +26,10 @@ const STALE_MS = 90000;
 // Viewers still get every push live, and the latest meta is kept in memory.
 const META_WRITE_MS = 60000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
+// One frame, scaled down on the player's own machine before it is sent. Well
+// under the Durable Object's 2 MB value limit, and small enough that a player's
+// connection isn't the price of being looked at.
+const MAX_SHOT_BYTES = 512 * 1024;
 const LOG_SIZE = 50;
 const ACTIONS_PER_MINUTE = 30;
 const CORS = {
@@ -71,10 +79,25 @@ export async function viewerFor(env, key) {
 // Changing any key disconnects everyone who joined before.
 const secretsHash = (env) => sha256(`${env.CONTROL_KEY || ""}|${env.ADMIN_KEY || ""}|${env.PLAYER_LINK_SECRET || ""}`);
 
+/**
+ * Who may look at a player's view of the world. The server decides with
+ * player_screens: "control" keeps frames with whoever holds the control key,
+ * "admin" lets every admin see them, "off" (or unset) means there are none.
+ * A player may always see their own, so they can check what is being shared.
+ */
+export function canSeeScreen(viewer, mode, uuid) {
+  if (mode !== "control" && mode !== "admin") return false;
+  if (viewer.role === "player") return viewer.uuid === uuid;
+  if (viewer.role !== "admin") return false;
+  return mode === "admin" || Boolean(viewer.control);
+}
+
 /** What one viewer may see of the stored state. */
 export function viewFor(viewer, state) {
   const players = state.players || [];
   const visible = viewer.role === "admin" ? players : players.filter((player) => player.uuid === viewer.uuid);
+  const mode = state.server?.player_screens || "off";
+  const shots = state.shots || {};
   return {
     type: "server",
     role: viewer.role,
@@ -84,7 +107,12 @@ export function viewFor(viewer, state) {
     stale_ms: STALE_MS,
     received_at: state.received_at || null,
     server: state.server || null,
-    players: visible,
+    // When a frame exists and this viewer may see it, its time: the page asks
+    // for the image itself over HTTP, so the frame is never pushed to someone
+    // who only happens to be holding the socket open.
+    players: visible.map((player) => (shots[player.uuid] && canSeeScreen(viewer, mode, player.uuid)
+      ? { ...player, screen_at: shots[player.uuid] }
+      : player)),
   };
 }
 
@@ -143,6 +171,8 @@ export class ServerStore extends DurableObject {
   }
 
   // Each player is its own row, so a big server never hits the 2 MB value limit.
+  // Frames live under their own "shot:" prefix rather than in here, so listing
+  // the players never pulls a single image into memory.
   async state() {
     const rows = await this.ctx.storage.list({ prefix: "server:" });
     const players = [];
@@ -153,7 +183,13 @@ export class ServerStore extends DurableObject {
       } else if (key.startsWith("server:player:")) players.push(JSON.parse(value));
     }
     players.sort((a, b) => Number(b.online) - Number(a.online) || String(a.name).localeCompare(String(b.name)));
-    return { server: meta.server, received_at: meta.received_at, players, connected: Boolean(this.serverSocket()) };
+    return { server: meta.server, received_at: meta.received_at, players, shots: await this.shots(), connected: Boolean(this.serverSocket()) };
+  }
+
+  /** uuid -> when its frame arrived. One small row, so a view never reads images. */
+  async shots() {
+    if (!this.shotIndex) this.shotIndex = JSON.parse((await this.ctx.storage.get("server:shots")) || "{}");
+    return this.shotIndex;
   }
 
   async publish(payload) {
@@ -177,8 +213,17 @@ export class ServerStore extends DurableObject {
     const entries = Object.entries(changes);
     for (let i = 0; i < entries.length; i += 100) await this.ctx.storage.put(Object.fromEntries(entries.slice(i, i + 100)));
     if (gone.length) await this.ctx.storage.delete(gone);
+    // A player the server no longer reports takes their frame with them, rather
+    // than leaving the last thing they looked at sitting in storage for good.
+    const shots = await this.shots();
+    const staleShots = Object.keys(shots).filter((uuid) => !incoming.has(uuid));
+    if (staleShots.length) {
+      for (const uuid of staleShots) delete shots[uuid];
+      await this.ctx.storage.delete(staleShots.map((uuid) => `shot:${uuid}`));
+      await this.ctx.storage.put("server:shots", JSON.stringify(shots));
+    }
 
-    const state = { server: payload.server || null, received_at: receivedAt, players: [...incoming.values()], connected: Boolean(this.serverSocket()) };
+    const state = { server: payload.server || null, received_at: receivedAt, players: [...incoming.values()], shots, connected: Boolean(this.serverSocket()) };
     await this.broadcast((viewer) => viewFor(viewer, state));
     return { players: incoming.size, written: entries.length, removed: gone.length };
   }
@@ -190,10 +235,73 @@ export class ServerStore extends DurableObject {
       try {
         const viewer = socket.deserializeAttachment();
         if (!viewer || viewer.secretsHash !== hash) socket.close(4001, "key changed");
-        else if (!controlOnly || viewer.control) socket.send(JSON.stringify(typeof message === "function" ? message(viewer) : message));
+        else if (!controlOnly || viewer.control) {
+          // a per-viewer message may come back null, meaning "not for this one"
+          const body = typeof message === "function" ? message(viewer) : message;
+          if (body) socket.send(JSON.stringify(body));
+        }
       } catch {
         // already gone
       }
+    }
+  }
+
+  /** What the server last said about who may see frames. */
+  async screensMode() {
+    const row = this.meta ? this.meta.row : await this.ctx.storage.get("server:meta");
+    try {
+      return JSON.parse(row || "{}").server?.player_screens || "off";
+    } catch {
+      return "off";
+    }
+  }
+
+  /** A frame from one player. Only its time is broadcast; the image is fetched. */
+  async publishShot(uuid, image) {
+    const at = Date.now();
+    const shots = await this.shots();
+    shots[uuid] = at;
+    await this.ctx.storage.put({ [`shot:${uuid}`]: image, "server:shots": JSON.stringify(shots) });
+    const mode = await this.screensMode();
+    await this.broadcast((viewer) => (canSeeScreen(viewer, mode, uuid) ? { type: "screen", uuid, at } : null));
+    return { at, bytes: image.byteLength };
+  }
+
+  /** The stored frame, if this viewer is allowed it. Null covers both "no" and "none". */
+  async shotFor(viewer, uuid) {
+    if (!canSeeScreen(viewer, await this.screensMode(), uuid)) return null;
+    const shots = await this.shots();
+    if (!shots[uuid]) return null;
+    const image = await this.ctx.storage.get(`shot:${uuid}`);
+    return image ? { image, at: shots[uuid] } : null;
+  }
+
+  /**
+   * Which players someone is actually looking at, sent down to the server so it
+   * only ever asks those clients for a frame. Nobody watching costs nothing:
+   * no capture on anyone's machine, no rows written here.
+   */
+  async sendWatch() {
+    const server = this.serverSocket();
+    if (!server) return;
+    const mode = await this.screensMode();
+    const wanted = new Set();
+    for (const socket of this.ctx.getWebSockets("server-viewer")) {
+      try {
+        const viewer = socket.deserializeAttachment();
+        if (viewer?.watching && canSeeScreen(viewer, mode, viewer.watching)) wanted.add(viewer.watching);
+      } catch {
+        // already gone
+      }
+    }
+    const uuids = [...wanted].sort();
+    const line = JSON.stringify(uuids);
+    if (line === this.lastWatch) return;
+    this.lastWatch = line;
+    try {
+      server.send(JSON.stringify({ type: "watch", uuids }));
+    } catch {
+      this.lastWatch = null;  // say it again on the next socket
     }
   }
 
@@ -223,6 +331,8 @@ export class ServerStore extends DurableObject {
       this.ctx.acceptWebSocket(socket, ["server-link"]);
       socket.serializeAttachment({ kind: "server" });
       await this.broadcast({ type: "link", connected: true });
+      this.lastWatch = null;  // a fresh socket knows nothing; say it again
+      await this.sendWatch();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -263,6 +373,13 @@ export class ServerStore extends DurableObject {
   }
 
   async fromViewer(socket, viewer, message) {
+    if (message?.type === "watch") {
+      const uuid = UUID.test(message.uuid || "") ? message.uuid : null;
+      if (uuid === (viewer.watching || null)) return;
+      socket.serializeAttachment({ ...viewer, watching: uuid });
+      await this.sendWatch();
+      return;
+    }
     if (message?.type !== "action") return;
     const reply = (body) => socket.send(JSON.stringify({ type: "action", ...body }));
     if (!viewer.control || viewer.secretsHash !== (await secretsHash(this.env))) {
@@ -303,6 +420,7 @@ export class ServerStore extends DurableObject {
     try { socket.close(code, reason); } catch { /* closed */ }
     const stillLinked = this.ctx.getWebSockets("server-link").some((other) => other !== socket);
     if (wasServer && !stillLinked) await this.broadcast({ type: "link", connected: false });
+    else if (!wasServer) await this.sendWatch();  // they may have been the only one looking
   }
 
   webSocketError(socket) {
@@ -346,6 +464,33 @@ export async function handleServer(request, env, url, path) {
     if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected websocket" }, 426);
     if (!fromServer(request, env)) return json({ error: "unauthorized" }, 401);
     return store(env).fetch(new Request(request.url, { headers: forwardHeaders({ "X-Server-Link": "1" }) }));
+  }
+
+  // A player's view of the world, pushed by the server that collected it.
+  if (path === "/server/shot" && request.method === "POST") {
+    if (!fromServer(request, env)) return json({ error: "unauthorized" }, 401);
+    const uuid = url.searchParams.get("uuid") || "";
+    if (!UUID.test(uuid)) return json({ error: "uuid required" }, 400);
+    if (Number(request.headers.get("Content-Length") || 0) > MAX_SHOT_BYTES) return json({ error: "too large" }, 413);
+    const image = await request.arrayBuffer();
+    if (image.byteLength === 0) return json({ error: "empty body" }, 400);
+    if (image.byteLength > MAX_SHOT_BYTES) return json({ error: "too large" }, 413);
+    return json({ ok: true, ...(await store(env).publishShot(uuid, image)) });
+  }
+
+  // 404 covers both "no frame" and "not for you", so an admin without the
+  // control key can't find out who is sharing one by asking.
+  if (path === "/server/shot" && request.method === "GET") {
+    const viewer = await viewerFor(env, url.searchParams.get("key"));
+    if (!viewer) return json({ error: "invite required" }, 401);
+    const uuid = url.searchParams.get("uuid") || "";
+    if (!UUID.test(uuid)) return json({ error: "uuid required" }, 400);
+    const found = await store(env).shotFor(viewer, uuid);
+    if (!found) return json({ error: "no frame" }, 404);
+    // The page asks with ?t=<screen_at>, so each frame is its own URL.
+    return new Response(found.image, {
+      headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=31536000, immutable", "X-Taken-At": String(found.at), ...CORS },
+    });
   }
 
   if (path === "/server/live" && request.method === "GET") {

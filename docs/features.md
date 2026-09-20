@@ -258,6 +258,8 @@ On someone else's server the page shows that you're playing, your vitals and you
 
 The server's address is never written anywhere. For a server you run yourself, see the [server tool](server-tool.md).
 
+The one thing you can choose to send a server is your view of the world, for its own admin page: `share_screen_with_server` in the mod's settings, off by default, and only answered while an admin actually has your page open. [What that means →](server-tool.md#a-players-view-of-the-world)
+
 ## Cursed mode
 
 <img src="images/curses.webp" alt="Recent curses card" width="480">
