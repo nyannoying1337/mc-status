@@ -37,28 +37,79 @@ node tests/live_socket_test.mjs              # in another terminal
 
 ## Running it locally
 
-**Worker.** Put test values in `worker/.dev.vars` (gitignored):
+One command brings up the whole page — the Worker, the site, and sample data — with
+no Minecraft and no Cloudflare account:
 
-```
-PUSH_TOKEN=local-push-token
-VIEW_KEY=local-view-key
-SERVER_PUSH_TOKEN=local-server-token
-ADMIN_KEY=local-admin-key
-CONTROL_KEY=local-control-key
-PLAYER_LINK_SECRET=local-link-secret
+```bash
+python tools/preview.py
 ```
 
-then `cd worker && npx wrangler dev --port 8788`.
+It prints a link like `http://localhost:8000/#key=local-view-key`. Ctrl-C stops
+everything. Useful flags:
 
-**Page.** `site/js/config.js` points at the example Worker by default. For a local preview, serve `site/` with any static server and change `API_URL` to `http://127.0.0.1:8788` (don't commit that change; the deploy rewrites the file anyway). Open `http://localhost:<port>/#key=local-view-key`.
+| Flag | What it does |
+| --- | --- |
+| `--scene logout` | the logged-out half: last seen, and a 360° panorama |
+| `--scene stale` | pushes once and goes quiet, so the page calls the machine quiet |
+| `--no-worker` | you already have `wrangler dev` running on that port |
+| `--no-push` | no sample data; the page waits like it would for a real agent |
+| `--port`, `--worker-port` | when something else is on 8000 or 8788 |
 
-**Agent.** Point a config at the local Worker and push once:
+Three pieces, and only one of them is a fake:
+
+- **The Worker is real.** `wrangler dev` runs `worker/worker.js` itself, Durable
+  Object and WebSockets included, so there is no second implementation to keep in
+  step. Secrets come from `worker/.dev.vars`, copied from
+  [`worker/.dev.vars.example`](../worker/.dev.vars.example) on first run.
+- **The page is served as it is.** `site/` goes out over a static server, with
+  `/js/config.js` answered from memory so it points at the local Worker. The file
+  in the tree is never touched, so there is nothing to remember not to commit.
+- **The agent and the mod are faked**, because they are the half that needs a
+  running game. [`tools/fake_agent.py`](../tools/fake_agent.py) pushes the page's
+  own `?demo` fixture ([`site/js/demo-data.js`](../site/js/demo-data.js), read
+  through Node so there is only one copy) and draws a frame and a panorama as it
+  goes. The page then takes its real path: invite key, WebSocket, broadcasts,
+  `/shot` and `/pano`.
+
+Item icons and HUD sprites are built from Mojang's client jar and aren't committed,
+so build them once or the page falls back to plain text:
+
+```bash
+pip install Pillow && python site/build_assets.py
+```
+
+`tools/fake_agent.py` runs on its own too, against any Worker:
+
+```bash
+python tools/fake_agent.py --once                     # one push and stop
+python tools/fake_agent.py --worker http://127.0.0.1:8788 --scene logout
+```
+
+### Why not fake the Worker as well
+
+Because there would then be two Workers, and the second one would be the one that
+never breaks. A stub that the page is happy with proves nothing about
+`worker/worker.js`, which is where the invite key, the viewer cap and the broadcasts
+actually live. `wrangler dev` costs one `npm install` and runs the real thing.
+
+### By hand
+
+The pieces separately, if you'd rather drive them yourself:
+
+```bash
+cp worker/.dev.vars.example worker/.dev.vars
+cd worker && npx wrangler dev --port 8788        # the Worker
+python -m http.server 8000 --directory site      # the page (then edit API_URL, see above)
+python tools/fake_agent.py                       # sample data
+```
+
+**A real agent** instead of the fake one, if you do have a game running:
 
 ```bash
 python agent/agent.py --config agent/local.toml --once
 ```
 
-**Server tool.** `cd mod && ./gradlew runServer` starts a dedicated Fabric server from the source, in `mod/run/` (gitignored). Accept the EULA in `mod/run/eula.txt`, set `online-mode=false` in `server.properties` for offline dev clients, and fill in `mod/run/config/mc-status-server.properties` with `worker_url=http://127.0.0.1:8788` and the `SERVER_PUSH_TOKEN` from `.dev.vars`. Serve the page and open `server.html#key=local-admin-key`.
+**Server tool.** `cd mod && ./gradlew runServer` starts a dedicated Fabric server from the source, in `mod/run/` (gitignored). Accept the EULA in `mod/run/eula.txt`, set `online-mode=false` in `server.properties` for offline dev clients, and fill in `mod/run/config/mc-status-server.properties` with `worker_url=http://127.0.0.1:8788` and the `SERVER_PUSH_TOKEN` from `.dev.vars`. Serve the page and open `server.html#key=local-admin-key`. `tools/fake_agent.py` doesn't stand in for a server yet — `server.html` still needs a real one.
 
 ## Building the mod
 
