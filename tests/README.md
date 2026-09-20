@@ -10,6 +10,7 @@ python tests/test_archive.py     # frame archive: thinning, privacy, pruning, st
 python tests/test_render.py      # map render: noticing a new world, starting clean
 python tests/test_agent_mod.py   # mod source, logout render, panorama, play time, checklists, privacy
 python tests/test_icons.py       # item icon renderer, over a synthetic client jar
+python tests/test_tray.py        # tray icon: wording, colour, and the no-console-window flags
 node tests/test_worker.mjs       # Worker routes, broadcasts, panorama, map markers
 node tests/test_server_worker.mjs  # server tool: keys, per-viewer filtering, write throttling
 ```

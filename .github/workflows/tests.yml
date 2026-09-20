@@ -31,6 +31,7 @@ jobs:
           python tests/test_archive.py
           python tests/test_render.py
           python tests/test_icons.py
+          python tests/test_tray.py
       - name: Worker
         run: |
           node tests/test_worker.mjs

@@ -8,6 +8,7 @@ About 15 minutes, all on free plans.
 - [Start your own and deploy](#start-your-own-and-deploy)
 - [Your own domain](#your-own-domain)
 - [Commands for later](#commands-for-later)
+- [The tray icon](#the-tray-icon)
 - [Deploying the Worker from GitHub](#deploying-the-worker-from-github)
 - [Installing without the wizard](#installing-without-the-wizard)
 - [Updating](#updating)
@@ -70,7 +71,7 @@ It asks before each step, and it's safe to run again:
 2. **The Worker:** deploys it with wrangler. A browser opens to log in to Cloudflare the first time.
 3. **Secrets:** generates the push token and stores it as a Worker secret and in `agent/config.toml` (gitignored).
 4. **GitHub:** sets the repository variables if `gh` is installed, otherwise prints them.
-5. **The agent:** installs its Python packages into `agent/.venv` and starts it at login (a scheduled task on Windows, launchd on macOS, a systemd user service on Linux).
+5. **The agent:** installs its Python packages into `agent/.venv` and starts it at login (a scheduled task on Windows, launchd on macOS, a systemd user service on Linux). On Windows it also gets a tray icon, next to the clock — see [the tray icon](#the-tray-icon).
 6. **The mod:** downloads the jar from your latest release into your `mods` folder.
 7. **Invite:** creates the invite key and prints your invite link.
 
@@ -119,8 +120,23 @@ Push to `main`, or re-run **Actions → Deploy site**. Then open the invite link
 | `python setup.py worker-config` | Only write `worker/wrangler.generated.toml` |
 | `python agent/agent.py --dry-run` | Print exactly what would be published, and which curses would fire |
 | `python agent/agent.py --once` | Collect and push once |
+| `python agent/agent.py --tray` | Run it with the tray icon |
 
 Useful flags: `--rotate` (replace the push token and invite key during guided setup), `--yes` (accept every default), `--dry-run` (change nothing).
+
+## The tray icon
+
+The agent runs with no window, so `--tray` is how you see what it's doing without opening the log. A small block
+sits next to the clock — green while you're in game, grey while you're away, red when the last push failed — and
+its menu shows who's in game and where, the day's play time, CPU and GPU, when the last push went out, and
+whether a map render or a frame publish is running. It can open the status page, open the log, push right now,
+and quit the agent.
+
+`python setup.py` turns it on for you on Windows, where it needs nothing but Python. Elsewhere pystray needs a
+backend your system provides (pyobjc on macOS, GTK or AppIndicator bindings on Linux), so it's a separate
+`agent/requirements-tray.txt` rather than part of the agent's requirements. Without it the agent logs one line
+and carries on with no icon. To go back to no icon on Windows:
+`powershell -ExecutionPolicy Bypass -File agent\install-windows.ps1 -NoTray`.
 
 ## Deploying the Worker from GitHub
 
@@ -146,6 +162,7 @@ Without the Cloudflare secrets the workflow skips itself (it still shows as succ
 2. `agent/.venv/bin/pip install -r agent/requirements.txt` (`agent\.venv\Scripts\pip` on Windows)
 3. Copy `agent/config.example.toml` to `agent/config.toml` and fill in `[worker]`.
 4. `agent/.venv/bin/python agent/agent.py --dry-run`, then run it with `--log-file agent/agent.log`.
+5. Optional, for the tray icon: `pip install -r agent/requirements-tray.txt`, then add `--tray`.
 
 **Mod**
 Take the jar from your Releases, or build it with `cd mod && ./gradlew build` (Java 25). Put it in `.minecraft/mods` next to Fabric API.
@@ -189,4 +206,5 @@ Take the jar from your Releases, or build it with `cd mod && ./gradlew build` (J
 | "The machine went quiet" | No push for 90 seconds: the agent stopped or the PC is off. Check `agent/agent.log`. |
 | No frame or panorama | The mod isn't installed or loaded. Check that `.minecraft/mc-status/latest.png` is being written. |
 | Map button missing | No logout map rendered yet, or `map.render_on_logout` is off, or `map` isn't allowed in the github-pages environment. |
+| No tray icon, and `agent.log` says "no tray icon" | pystray isn't installed in `agent/.venv`. `agent\.venv\Scripts\pip install -r agent\requirements-tray.txt`, then `python setup.py restart`. |
 | wrangler asks to paste a secret | Some terminals make wrangler ignore piped input. The wizard puts the value on your clipboard: paste, press Enter, and it clears the clipboard afterwards. |

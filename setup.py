@@ -242,6 +242,14 @@ def install_agent_requirements() -> None:
         say("Creating agent/.venv...")
         run([sys.executable, "-m", "venv", str(venv)])
     run([str(python), "-m", "pip", "install", "--quiet", "--upgrade", "-r", str(AGENT / "requirements.txt")])
+    if os.name == "nt":
+        # The tray icon. Windows only by default: it is where the agent runs with
+        # no console at all, and where pystray needs nothing but ctypes. The agent
+        # runs fine without it, so a failure here is worth a line and no more.
+        tray = run([str(python), "-m", "pip", "install", "--quiet", "--upgrade",
+                    "-r", str(AGENT / "requirements-tray.txt")], capture=True)
+        if tray.returncode:
+            say("Couldn't install the tray icon's package — the agent will run without an icon.")
 
 
 def agent_python(windowless: bool = False) -> Path:

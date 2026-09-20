@@ -1,0 +1,7 @@
+# The tray icon, for `agent.py --tray`. Separate from requirements.txt because
+# the backends are platform-specific: on Windows pystray is ctypes over the
+# shell API, on macOS it pulls in pyobjc, and on Linux it needs the GTK or
+# AppIndicator bindings your distribution provides. setup.py installs this on
+# Windows, where the agent runs with no console and the icon is the only thing
+# that tells you it's alive.
+pystray>=0.19

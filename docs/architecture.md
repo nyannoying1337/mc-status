@@ -85,7 +85,12 @@ A loop that runs every 10 seconds while you play and every 60 seconds otherwise.
 4. **Curses:** evaluate rules and write `commands/*.json` for the mod (or send over RCON).
 5. **On logout:** upload the panorama if it belongs to this logout (taken within 10 minutes of it), then run `map/render.py` if enabled.
 
-It runs at login via a Windows scheduled task, a launchd agent or a systemd user service (`setup.py autostart`).
+It runs at login via a Windows scheduled task, a launchd agent or a systemd user service (`setup.py autostart`),
+with no console of its own. On Windows that means every program it starts — `git`, `java` — would be handed a
+console window, which is why `agent/common.py` and `map/render.py` pass `CREATE_NO_WINDOW` to every subprocess:
+a logout used to throw half a dozen terminals on the desktop. `--tray` (`agent/tray.py`, the default on Windows)
+puts a small block next to the clock instead: green in game, grey away, red when the last push failed, with the
+player, the day's play time, CPU and GPU, the last push and any running render in its menu.
 
 ## The Worker
 

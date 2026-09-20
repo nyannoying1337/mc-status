@@ -2,13 +2,15 @@
 #
 #   powershell -ExecutionPolicy Bypass -File agent\install-windows.ps1
 #
-# Runs as your user with no console window; logs go to agent\agent.log.
+# Runs as your user with no console window, with a tray icon next to the clock;
+# logs go to agent\agent.log. Pass -NoTray to leave the icon off.
 # To remove it again:
 #   Unregister-ScheduledTask -TaskName "mc-status agent" -Confirm:$false
 
 param(
     [string]$Python = (Join-Path $PSScriptRoot ".venv\Scripts\pythonw.exe"),
-    [string]$Config = (Join-Path $PSScriptRoot "config.toml")
+    [string]$Config = (Join-Path $PSScriptRoot "config.toml"),
+    [switch]$NoTray
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,9 +24,9 @@ if (-not (Test-Path $Config)) {
 
 $agent = Join-Path $PSScriptRoot "agent.py"
 $log = Join-Path $PSScriptRoot "agent.log"
-$action = New-ScheduledTaskAction -Execute $Python `
-    -Argument "`"$agent`" --config `"$Config`" --log-file `"$log`"" `
-    -WorkingDirectory $PSScriptRoot
+$arguments = "`"$agent`" --config `"$Config`" --log-file `"$log`""
+if (-not $NoTray) { $arguments += " --tray" }
+$action = New-ScheduledTaskAction -Execute $Python -Argument $arguments -WorkingDirectory $PSScriptRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `

@@ -183,10 +183,18 @@ def write_config(world: Path, live_root: str, accept_download: bool, threads: in
 
 MIN_JAVA = 25  # BlueMap 5.24 is compiled for Java 25 (class file version 69)
 
+# The agent starts this script from a process with no console (a scheduled task on
+# pythonw.exe), and Windows hands every console program started from such a process
+# a console of its own. Without this, one logout render threw up a terminal for java
+# and one for each git command. The agent has the same constant in agent/common.py;
+# this script runs standalone and imports nothing from there.
+NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sys.platform == "win32" else {}
+
 
 def java_major(executable: str) -> int | None:
     try:
-        output = subprocess.run([executable, "-version"], capture_output=True, text=True, timeout=20).stderr
+        output = subprocess.run([executable, "-version"], capture_output=True, text=True, timeout=20,
+                                **NO_WINDOW).stderr
     except (OSError, subprocess.SubprocessError):
         return None
     match = re.search(r'version "(\d+)(?:\.(\d+))?', output)
@@ -263,8 +271,22 @@ def install_web_additions() -> None:
 
 
 def run(command: list[str], cwd: Path | None = None) -> None:
-    print("$", " ".join(command))
-    subprocess.run(command, cwd=cwd, check=True)
+    """Our own output handles are passed on deliberately. CREATE_NO_WINDOW gives the
+    child a console of its own, so a child left to find its own would write BlueMap's
+    progress to a window nobody can see, rather than to this terminal — or, when the
+    agent started us, to agent.log."""
+    print("$", " ".join(command), flush=True)
+    subprocess.run(command, cwd=cwd, check=True, stdout=_output(), stderr=subprocess.STDOUT, **NO_WINDOW)
+
+
+def _output():
+    """sys.stdout, unless there is no file behind it (pythonw), in which case there
+    is nowhere for the child's output to go."""
+    try:
+        sys.stdout.fileno()
+    except (AttributeError, ValueError, OSError):
+        return subprocess.DEVNULL
+    return sys.stdout
 
 
 def publish(remote: str) -> None:
@@ -278,7 +300,7 @@ def publish(remote: str) -> None:
 
     url = subprocess.run(
         ["git", "remote", "get-url", remote],
-        cwd=HERE, capture_output=True, text=True, check=True,
+        cwd=HERE, capture_output=True, text=True, check=True, **NO_WINDOW,
     ).stdout.strip()
 
     install_web_additions()

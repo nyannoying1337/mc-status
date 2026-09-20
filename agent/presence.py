@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from common import hide_coordinates, log, worker_endpoint
+from common import hide_coordinates, log, popen_hidden, worker_endpoint
 
 RENDER_SCRIPT = Path(__file__).resolve().parent.parent / "map" / "render.py"
 
@@ -161,8 +161,8 @@ def render_after_save(config: dict, world: Path, seen: dict, rejoined) -> None:
     command = render_command(config, world, seen)
     log.info("rendering map around %s in %s", seen["position"], seen["dimension"])
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                   encoding="utf-8", errors="replace")
+        process = popen_hidden(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                               encoding="utf-8", errors="replace")
         for line in process.stdout:
             log.info("render: %s", line.rstrip())
         code = process.wait(timeout=30 * 60)
