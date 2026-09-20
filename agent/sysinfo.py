@@ -17,7 +17,7 @@ import time
 
 import psutil
 
-from common import log
+from common import log, run_hidden
 
 TEMPERATURE_INTERVAL = 300
 
@@ -82,7 +82,7 @@ def _linux_cpu_name() -> str | None:
 
 def _sysctl(name: str) -> str | None:
     try:
-        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True, timeout=5).stdout.strip() or None
+        return run_hidden(["sysctl", "-n", name], capture_output=True, text=True, timeout=5).stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -191,7 +191,7 @@ def _temperatures() -> dict:
         _temps = {}
         return _temps
     try:
-        raw = subprocess.run(
+        raw = run_hidden(
             ["fastfetch", "--format", "json", "--structure", "CPU:GPU", "--cpu-temp", "true", "--gpu-temp", "true"],
             capture_output=True, text=True, timeout=15, check=True,
         ).stdout

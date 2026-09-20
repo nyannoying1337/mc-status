@@ -6,15 +6,35 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
 log = logging.getLogger("agent")
 
+# The agent runs without a console of its own: a scheduled task on pythonw.exe,
+# launchd, systemd. Windows gives every console program started from such a
+# process a console of its own, so git and java each threw up a terminal on the
+# desktop — a handful of them at once every time a session ended. CREATE_NO_WINDOW
+# keeps them where they belong, in the log. Every subprocess the agent starts goes
+# through run_hidden or popen_hidden; map/render.py carries its own copy, because
+# it runs standalone and imports nothing from here.
+NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sys.platform == "win32" else {}
+
 # Minecraft usernames. Anything else is refused before it can be spliced into
 # an RCON command.
 PLAYER_NAME = re.compile(r"^[A-Za-z0-9_]{3,16}$")
+
+
+def run_hidden(command: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run, with no console window on Windows."""
+    return subprocess.run(command, **NO_WINDOW, **kwargs)
+
+
+def popen_hidden(command: list[str], **kwargs) -> subprocess.Popen:
+    """subprocess.Popen, with no console window on Windows."""
+    return subprocess.Popen(command, **NO_WINDOW, **kwargs)
 
 
 def load_config(path: Path) -> dict:

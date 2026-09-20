@@ -9,6 +9,7 @@ Modules:
   cursed    cursed-mode rules
   sysinfo   CPU, GPU and memory load
   upload    requests to the Worker
+  tray      the optional tray icon (--tray)
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import media
 import playtime
 import presence
 import sysinfo
+import tray
 import upload
 from common import load_config, log, mod_dir, source_type
 
@@ -75,6 +77,9 @@ def run_once(config: dict, state: dict) -> bool:
     if (shot_at := media.sync_screenshot(config, state, mode)):
         payload["screenshot_at"] = shot_at
 
+    # The tray icon shows the push that just went out rather than collecting
+    # anything of its own; this is where it reads it from.
+    state["last_payload"] = payload
     upload.push_status(config, payload)
     log.info("pushed — player %s, %d items", "online" if online else "offline",
              len(player.get("hotbar", [])) + len(player.get("inventory", [])))
@@ -107,6 +112,8 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="collect and push a single time")
     parser.add_argument("--dry-run", action="store_true", help="print the payload, push nothing")
     parser.add_argument("--log-file", type=Path, help="also log here, rotated at 1 MB (for running without a console)")
+    parser.add_argument("--tray", action="store_true",
+                        help="show a tray icon with what the agent is doing (needs agent/requirements-tray.txt)")
     args = parser.parse_args()
 
     handlers: list[logging.Handler] = [logging.StreamHandler()]
@@ -124,34 +131,62 @@ def main() -> int:
         dry_run(config)
         return 0
 
+    state: dict = {}
+    if args.tray:
+        icon = tray.Tray(config, args.log_file)
+        return icon.run(lambda: loop(config, state, args.once, icon))
+    loop(config, state, args.once)
+    return 0
+
+
+def loop(config: dict, state: dict, once: bool = False, icon=None) -> None:
+    """Push, then wait. With a tray icon, the waiting is interruptible: "Push now"
+    and "Quit" should not sit for an interval before anything happens."""
     agent_config = config.get("agent", {})
     interval = int(agent_config.get("interval_seconds", 10))
     # Nothing changes while you're away, so push rarely: well under the page's
     # 90 s "quiet" threshold, and easy on the free tiers.
     offline_interval = int(agent_config.get("offline_interval_seconds", 60))
-    state: dict = {}
 
     while True:
-        online = False
+        online, failure = False, None
         try:
             online = run_once(config, state)
         except requests.RequestException as err:
+            failure = err
             log.warning("push failed: %s", err)
-        except Exception:
+        except Exception as err:
+            failure = err
             log.exception("unexpected error")
+        if icon:
+            icon.pushed(state, online, failure)
 
-        if args.once:
-            return 0
+        if once:
+            return
         if online:
-            time.sleep(interval)
+            if _wait(interval, icon) == tray.STOP:
+                return
             continue
         # While offline, look at the mod's file every few seconds so a join is
         # picked up quickly, but only push when the interval is up or you're back.
         step = min(5, interval)
         for _ in range(max(1, offline_interval // step)):
-            time.sleep(step)
+            waited = _wait(step, icon)
+            if waited == tray.STOP:
+                return
+            if waited == tray.PUSH:
+                break
             if source_type(config) == "mod" and collect.collect_player_mod(config, collect.read_mod_state(config)).get("online"):
                 break
+
+
+def _wait(seconds: float, icon=None) -> str:
+    """Sleeps, and says what woke it: "" for the time simply being up, tray.STOP to
+    shut the agent down, tray.PUSH when the tray's "Push now" was clicked."""
+    if icon is None:
+        time.sleep(seconds)
+        return ""
+    return icon.wait(seconds)
 
 
 if __name__ == "__main__":

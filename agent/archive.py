@@ -22,7 +22,8 @@ import time
 from pathlib import Path
 
 import upload
-from common import expand, hide_coordinates, log, mod_dir, share_server_world, source_type, write_json_atomic
+from common import (expand, hide_coordinates, log, mod_dir, run_hidden, share_server_world, source_type,
+                    write_json_atomic)
 
 DEFAULT_DIR = Path(__file__).with_name("shots")
 # Your own disk is cheap; the published branch is not. Keeping more locally than
@@ -206,8 +207,8 @@ def publish(config: dict, remote: str = "origin") -> bool:
         return False
     here = Path(__file__).resolve().parent.parent
     try:
-        url = subprocess.run(["git", "remote", "get-url", remote], cwd=here,
-                             capture_output=True, text=True, check=True).stdout.strip()
+        url = run_hidden(["git", "remote", "get-url", remote], cwd=here,
+                         capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("no git remote to publish shots to: %s", err)
         return False
@@ -257,4 +258,4 @@ def publish_later(config: dict, state: dict) -> None:
 
 
 def _run(command: list[str], cwd: Path) -> None:
-    subprocess.run(command, cwd=cwd, check=True, capture_output=True, text=True)
+    run_hidden(command, cwd=cwd, check=True, capture_output=True, text=True)
