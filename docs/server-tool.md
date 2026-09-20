@@ -88,9 +88,9 @@ If the server isn't connected, the buttons are replaced by a note and nothing is
 
 ## A player's view of the world
 
-Off by default, and narrower than it sounds. With `player_screens` set, the admin page can show what a player is looking at, as a still frame that refreshes every half a minute or so.
+Off by default, and narrower than it sounds. With `player_screens` set, the admin page can show what a player is looking at, as a still frame that refreshes every half a minute or so. Needs mc-status 1.5.0 or newer on the server.
 
-**Who can be shown.** Only a player who has the mc-status mod installed *and* has set `share_screen_with_server=true` in their own `config/mc-status.properties`. A vanilla client cannot be shown at all: a server has no access to what a client draws, and there's no setting on the server that changes that. Anyone who hasn't opted in appears with "nothing to show" on their page, which is also what an admin sees for a player who has quietly turned it back off.
+**Who can be shown.** Only a player who has mc-status 1.5.0 or newer installed *and* has set `share_screen_with_server=true` in their own `config/mc-status.properties`. An older jar has no idea what the server is asking for and stays quiet. A vanilla client cannot be shown at all: a server has no access to what a client draws, and there's no setting on the server that changes that. Anyone who hasn't opted in appears with "nothing to show" on their page, which is also what an admin sees for a player who has quietly turned it back off.
 
 **What it is.** The world as their character sees it, captured before their game draws any interface. It can never contain their chat, their HUD, an open inventory, another window, or anything else on their computer. It is not their screen, and it is not live video.
 
