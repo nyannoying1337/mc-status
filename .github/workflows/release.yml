@@ -39,10 +39,8 @@ jobs:
       # tag_name comes from gradle.properties rather than the ref, so Run workflow
       # creates the tag it releases. Without it the action has nothing to attach to
       # off a branch, and the run fails after a successful build.
-      # prerelease and make_latest are spelled out rather than left to the action.
-      # Run workflow published v1.5.0 as a pre-release on its own, and setup.py asks
-      # GitHub for the *latest* release, an endpoint that skips pre-releases — so the
-      # wizard's download 404'd on a release that looked fine on the releases page.
+      # prerelease and make_latest are spelled out rather than left to the action,
+      # which published v1.5.0 as a pre-release on its own.
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.value }}
@@ -51,3 +49,15 @@ jobs:
           generate_release_notes: true
           prerelease: false
           make_latest: true
+
+      # Those two only take on a release the action creates. On one that already
+      # exists it updates the notes and the jar and leaves the flags alone, so a
+      # release published as a pre-release stays one however often it is re-run —
+      # measured on v1.5.0. setup.py downloads from GitHub's "latest release",
+      # which skips pre-releases, so that state hides the jar from the wizard.
+      - name: Make sure it is published as a release, not a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "v${{ steps.version.outputs.value }}" \
+            --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
