@@ -16,7 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.util.Util;
-import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
 
 /**
@@ -108,10 +107,18 @@ final class PanoramaCapture {
 				renderer.update(DeltaTracker.ONE);
 				renderer.extract(DeltaTracker.ONE, true);
 				renderer.renderLevel(DeltaTracker.ONE);
-				// copy out before the next face draws over the main target
+				// Copy out before the next face draws over the main target.
+				//
+				// A straight copy, not blitAndBlendToTexture: that blends using the
+				// source's alpha, and the main target only has alpha where something
+				// was actually drawn. Sky and terrain are fine; the stretch below the
+				// horizon that is only the frame's clear colour has alpha 0, so it
+				// blended to nothing and came out as the black this used to clear to.
+				// On screen you never see it, because nothing blends the frame there.
+				// The main target is FACE×FACE for the duration, so no scaling is
+				// needed and the copy is exact.
 				faces[face] = new TextureTarget("mc-status panorama " + face, FACE, FACE, false, main.getColorTexture().getFormat());
-				encoder.clearColorTexture(faces[face].getColorTexture(), new Vector4f(0, 0, 0, 1));
-				main.blitAndBlendToTexture(faces[face].getColorTextureView(), null);
+				encoder.copyTextureToTexture(main.getColorTexture(), faces[face].getColorTexture(), 0, 0, 0, 0, 0, FACE, FACE);
 			}
 		} catch (RuntimeException err) {
 			McStatusClient.LOG.warn("panorama failed: {}", err.toString());
