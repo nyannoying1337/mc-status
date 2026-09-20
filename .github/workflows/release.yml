@@ -39,9 +39,15 @@ jobs:
       # tag_name comes from gradle.properties rather than the ref, so Run workflow
       # creates the tag it releases. Without it the action has nothing to attach to
       # off a branch, and the run fails after a successful build.
+      # prerelease and make_latest are spelled out rather than left to the action.
+      # Run workflow published v1.5.0 as a pre-release on its own, and setup.py asks
+      # GitHub for the *latest* release, an endpoint that skips pre-releases — so the
+      # wizard's download 404'd on a release that looked fine on the releases page.
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.value }}
           files: mod/build/libs/mc-status-*.jar
           fail_on_unmatched_files: true
           generate_release_notes: true
+          prerelease: false
+          make_latest: true
