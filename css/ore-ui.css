@@ -1,0 +1,149 @@
+/* Ore UI skin for the BlueMap webapp, matching the status page.
+   Loaded via webapp.conf `styles`. It only overrides BlueMap's theme variables and
+   restyles its controls; checked against BlueMap 5.24, the version render.py pins. */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700;800&display=swap");
+
+:root, #app, #app .theme-dark, #app .theme-light, #app .theme-contrast, .theme-dark, .theme-light, .theme-contrast {
+  --theme-bg: #313233 !important;
+  --theme-bg-hover: #3c3d3e !important;
+  --theme-bg-light: #48494a !important;
+  --theme-fg: #ffffff !important;
+  --theme-fg-light: #c7c8cb !important;
+  --theme-switch-button-on: #3c8527 !important;
+  --theme-stars-day: #ffffff !important;
+  --theme-moon-day: #ffd84a !important;
+  --theme-stars-night: #8f9094 !important;
+  --theme-moon-night: #1e1e1f !important;
+  font-family: "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  font-weight: 500 !important;
+}
+
+html, body { background: #1e1e1f; }
+
+/* ---- the floating control bar: separate Ore buttons ---- */
+#app .control-bar {
+  top: 12px !important;
+  left: 12px !important;
+  right: 12px !important;
+  height: auto !important;
+  align-items: center;
+  gap: 6px;
+}
+#app .control-bar .space { width: 6px; background: transparent !important; border: 0 !important; }
+#app .control-bar .space.greedy { flex-grow: 1; }
+
+#app .svg-button,
+#app .number-input {
+  min-height: 40px !important;
+  background-color: #313233 !important;
+  border: 2px solid #0e0e0f !important;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 0 #4c4d4f, inset 0 -4px 0 #232324;
+}
+#app .svg-button { min-width: 40px; display: flex; align-items: center; justify-content: center; padding: 0 6px 2px; }
+#app .svg-button svg { fill: #ffffff !important; height: 22px !important; }
+#app .svg-button:hover { background-color: #3c3d3e !important; }
+#app .svg-button:active { transform: translateY(2px); box-shadow: inset 0 2px 0 #4c4d4f, inset 0 -2px 0 #232324; color: inherit !important; }
+#app .svg-button.active {
+  background-color: #3c8527 !important;
+  box-shadow: inset 0 2px 0 #58a53c, inset 0 -4px 0 #1d4d13;
+}
+#app .svg-button.active:hover { background-color: #347523 !important; }
+
+/* a row of joined buttons (map / flat / free-flight) */
+#app .controls-switch { display: flex; gap: 0; }
+#app .controls-switch .svg-button { border-radius: 0; }
+#app .controls-switch .svg-button + .svg-button { border-left: 0 !important; }
+#app .controls-switch .svg-button:first-child { border-radius: 4px 0 0 4px; }
+#app .controls-switch .svg-button:last-child { border-radius: 0 4px 4px 0; }
+
+/* coordinates */
+#app .position-input { display: flex; gap: 6px; border: 0 !important; }
+#app .number-input { color: #ffffff !important; padding: 0 10px 2px; display: flex; align-items: center; }
+#app .number-input .label { color: #8f9094 !important; font-weight: 700; }
+#app .number-input input { color: #ffffff !important; font-weight: 700; font-variant-numeric: tabular-nums; font-family: inherit !important; }
+
+/* zoom */
+#app #zoom-buttons { right: 12px !important; bottom: 44px !important; display: flex; flex-direction: column; gap: 6px; }
+
+/* ---- side menu ---- */
+#app .side-menu {
+  background-color: #313233 !important;
+  border-right: 2px solid #0e0e0f;
+  box-shadow: inset -2px 0 0 #4c4d4f;
+}
+#app .side-menu .header,
+#app .side-menu > .header {
+  background-color: #141415 !important;
+  border-bottom: 2px solid #0e0e0f !important;
+  font-weight: 800;
+}
+#app .side-menu h1, #app .side-menu h2 {
+  font-size: 13px !important; font-weight: 700 !important; letter-spacing: .6px; text-transform: uppercase; color: #8f9094 !important;
+}
+#app .side-menu h1::after, #app .side-menu h2::after { background-color: #434446 !important; }
+#app .side-menu .simple-button,
+#app .side-menu .switch-button,
+#app .side-menu .map-button,
+#app .side-menu .slider {
+  border-radius: 4px; margin: 2px 0;
+}
+#app .side-menu .simple-button:hover,
+#app .side-menu .switch-button:hover,
+#app .side-menu .map-button:hover { background-color: #3c3d3e !important; }
+#app .side-menu .map-button.selected,
+#app .side-menu .simple-button.active {
+  background-color: #3c8527 !important;
+  box-shadow: inset 0 2px 0 #58a53c, inset 0 -3px 0 #1d4d13;
+}
+#app .side-menu .map-button .id { color: #c7c8cb !important; }
+#app .side-menu .group,
+#app .side-menu .choice-box {
+  border: 2px solid #0e0e0f !important;
+  border-radius: 4px;
+  background: #1e1e1f;
+}
+#app .side-menu .text-input { background-color: #141415 !important; border: 2px solid #0e0e0f; border-radius: 4px; color: #fff; }
+#app .side-menu .slider input[type=range] { accent-color: #3c8527; }
+
+/* marker labels and the player's name tag */
+.bm-marker-player .bm-player-name,
+.bm-marker-html .bm-marker-label,
+.bm-marker-poi .bm-marker-label {
+  font-family: "Noto Sans", system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  background: rgba(14, 14, 15, .85) !important;
+  border: 2px solid #0e0e0f;
+  border-radius: 4px;
+}
+
+/* last death, from live-feed.js */
+.mcs-death .bm-marker-poi-icon {
+  width: 32px; height: 32px; image-rendering: pixelated;
+  padding: 4px; box-sizing: content-box;
+  background: rgba(14, 14, 15, .8); border: 2px solid #0e0e0f; border-radius: 4px;
+}
+
+/* ---- added by site-chrome.js ---- */
+.mcs-back {
+  position: fixed; left: 12px; bottom: 44px; z-index: 10000;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 16px 11px; border: 2px solid #0e0e0f; border-radius: 4px;
+  background: #d0d1d4; color: #1e1e1f; text-decoration: none;
+  font: 700 14px "Noto Sans", system-ui, sans-serif;
+  box-shadow: inset 0 2px 0 #ecedee, inset 0 -4px 0 #58585a;
+}
+.mcs-back:hover { background: #e0e1e4; }
+.mcs-back:active { transform: translateY(2px); box-shadow: inset 0 2px 0 #ecedee, inset 0 -2px 0 #58585a; }
+.mcs-back img { width: 20px; height: 20px; image-rendering: pixelated; }
+.mcs-disclaimer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10000;
+  padding: 6px 12px; text-align: center; pointer-events: none;
+  font: 500 11px/1.4 "Noto Sans", system-ui, sans-serif; color: #8f9094;
+  background: #141415; border-top: 2px solid #0e0e0f;
+}
+@media (max-width: 575px) {
+  .mcs-back { bottom: 52px; padding: 5px 12px 9px; font-size: 13px; }
+  .mcs-back span { display: none; }
+  #app #zoom-buttons { bottom: 52px !important; }
+}
