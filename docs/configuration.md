@@ -44,6 +44,7 @@ Created by `python setup.py` from [`agent/config.example.toml`](../agent/config.
 | --- | --- | --- |
 | `type` | `"mod"` | `"mod"`: singleplayer with the mc-status mod. `"rcon"`: a server you run, asked over RCON |
 | `game_dir` | the launcher's folder | `%APPDATA%/.minecraft` on Windows, `~/Library/Application Support/minecraft` on macOS, `~/.minecraft` elsewhere |
+| `find_instances` | `true` | also watch the instances of Prism, the Modrinth App, CurseForge and GDLauncher, and read from whichever instance was played last. For any other launcher, give `game_dir` a list of folders instead: `["%APPDATA%/.minecraft", "D:/Games/modpack/.minecraft"]` |
 
 ### `[rcon]`
 

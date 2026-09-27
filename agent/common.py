@@ -59,12 +59,72 @@ def default_game_dir() -> str:
     return "~/.minecraft"
 
 
+def configured_game_dirs(config: dict) -> list[Path]:
+    """source.game_dir: one folder, or a list of them."""
+    raw = config.get("source", {}).get("game_dir", default_game_dir())
+    return [expand(entry) for entry in (raw if isinstance(raw, list) else [raw])]
+
+
 def game_dir(config: dict) -> Path:
-    return expand(config.get("source", {}).get("game_dir", default_game_dir()))
+    """The first configured game folder: where setup puts the mod jar."""
+    return configured_game_dirs(config)[0]
+
+
+def _data_dirs() -> list[Path]:
+    """Where launchers keep their data on this platform."""
+    home = Path.home()
+    if sys.platform == "win32":
+        return [expand("%APPDATA%"), home]
+    if sys.platform == "darwin":
+        return [home / "Library" / "Application Support", home / "Documents", home]
+    return [Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share"), home,
+            home / ".var" / "app" / "org.prismlauncher.PrismLauncher" / "data"]
+
+
+# Launchers other than Mojang's give every instance a game folder of its own,
+# and the mod writes into whichever one is running. Relative to _data_dirs().
+INSTANCE_PATTERNS = (
+    "PrismLauncher/instances/*/minecraft",
+    "PrismLauncher/instances/*/.minecraft",
+    "ModrinthApp/profiles/*",
+    "com.modrinth.theseus/profiles/*",
+    "curseforge/minecraft/Instances/*",
+    "gdlauncher_next/instances/*",
+)
+
+_active_mod_dir: Path | None = None
+
+
+def candidate_game_dirs(config: dict) -> list[Path]:
+    dirs = configured_game_dirs(config)
+    if config.get("source", {}).get("find_instances", True):
+        for base in _data_dirs():
+            for pattern in INSTANCE_PATTERNS:
+                try:
+                    dirs.extend(sorted(base.glob(pattern)))
+                except OSError:
+                    continue
+    return dirs
 
 
 def mod_dir(config: dict) -> Path:
-    return game_dir(config) / "mc-status"
+    """The mc-status folder of the instance played most recently: the one whose
+    state.json was written last. The first configured game folder if none has one."""
+    global _active_mod_dir
+    newest, newest_at = None, None
+    for folder in candidate_game_dirs(config):
+        try:
+            written_at = (folder / "mc-status" / "state.json").stat().st_mtime
+        except OSError:
+            continue
+        if newest_at is None or written_at > newest_at:
+            newest, newest_at = folder / "mc-status", written_at
+    chosen = newest or game_dir(config) / "mc-status"
+    if chosen != _active_mod_dir:
+        if _active_mod_dir is not None or newest is not None:
+            log.info("reading the mod's files from %s", chosen)
+        _active_mod_dir = chosen
+    return chosen
 
 
 def hide_coordinates(config: dict) -> bool:
