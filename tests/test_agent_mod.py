@@ -356,3 +356,39 @@ assert collect.collect_player(config, collect.read_mod_state(config))["advanceme
 write_state(mode="multiplayer", world_path=None, advancements=adv)
 assert "advancements" not in collect.collect_player(config, collect.read_mod_state(config))
 print("CHECKLIST TESTS PASSED")
+
+# ============================================================ other launchers' instances
+import os, common
+launchers = tmp / "launchers"
+prism = launchers / "PrismLauncher" / "instances" / "Modpack" / "minecraft"
+modrinth = launchers / "ModrinthApp" / "profiles" / "Fabulously Optimized"
+for folder in (prism, modrinth):
+    (folder / "mc-status").mkdir(parents=True)
+real_data_dirs, common._data_dirs = common._data_dirs, lambda: [launchers]
+
+def touch_state(folder: Path, age: float):
+    path = folder / "mc-status" / "state.json"
+    path.write_text((game / "mc-status" / "state.json").read_text())
+    os.utime(path, (time.time() - age, time.time() - age))
+
+write_state()
+os.utime(game / "mc-status" / "state.json", (time.time() - 600, time.time() - 600))
+touch_state(prism, 1)
+touch_state(modrinth, 300)
+assert common.mod_dir(config) == prism / "mc-status"                  # the instance played last wins
+assert collect.read_mod_state(config)["name"] == "nyannoying"
+assert cursed.queue_mod_commands(config, ["say hi"]).parent == prism / "mc-status" / "commands"
+
+touch_state(modrinth, 0)
+os.utime(prism / "mc-status" / "state.json", (time.time() - 60, time.time() - 60))
+assert common.mod_dir(config) == modrinth / "mc-status"               # switching instances follows along
+
+assert common.mod_dir(dict(config, source=dict(config["source"], find_instances=False))) == game / "mc-status"
+listed = dict(config, source={"type": "mod", "game_dir": [str(game), str(tmp / "elsewhere")]})
+(tmp / "elsewhere" / "mc-status").mkdir(parents=True)
+(tmp / "elsewhere" / "mc-status" / "state.json").write_text("{}")
+assert common.mod_dir(dict(listed, source=dict(listed["source"], find_instances=False))) == tmp / "elsewhere" / "mc-status"
+assert common.game_dir(listed) == game                                # setup still puts the jar in the first
+
+common._data_dirs = real_data_dirs
+print("INSTANCE TESTS PASSED")

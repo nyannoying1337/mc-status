@@ -518,9 +518,8 @@ def restart_agent() -> None:
 
 def default_mods_dir() -> Path:
     sys.path.insert(0, str(AGENT))
-    from common import default_game_dir, expand  # the agent's own idea of where the game is
-    raw = load_config().get("source", {}).get("game_dir", default_game_dir())
-    return expand(raw) / "mods"
+    from common import game_dir  # the agent's own idea of where the game is
+    return game_dir(load_config()) / "mods"
 
 
 def download_mod(slug: str) -> None:

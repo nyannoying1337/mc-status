@@ -33,6 +33,10 @@ type = "mod"
 # Where the game lives. Default: %APPDATA%/.minecraft on Windows,
 # ~/Library/Application Support/minecraft on macOS, ~/.minecraft elsewhere.
 # game_dir = "%APPDATA%/.minecraft"
+# Instances of Prism, the Modrinth App, CurseForge and GDLauncher are found on
+# their own, and the one played last is read. For another launcher, list them:
+# game_dir = ["%APPDATA%/.minecraft", "D:/Games/modpack/.minecraft"]
+# find_instances = true
 
 [rcon]
 # Only used with source.type = "rcon".
